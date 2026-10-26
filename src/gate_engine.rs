@@ -104,10 +104,10 @@ impl ConfidenceGateEngine {
         resp: &SystemOneResponse,
         api_order_succeeded: bool,
     ) -> LoopDecision {
-        // 1. 终点判定：旁路 API 已确认成交，或视觉 noul 高置信度判定完成
+        // 1. 终点判定：旁路 API 已确认成功，或视觉 noul 高置信度判定完成
         if api_order_succeeded {
             return LoopDecision::Completed {
-                reason: "旁路网络嗅探捕获到订单 API 201 成功响应",
+                reason: "旁路网络嗅探捕获到上游 API 201 成功响应",
             };
         }
         if resp.noul("is_goal_completed") >= self.config.goal_completed_threshold {

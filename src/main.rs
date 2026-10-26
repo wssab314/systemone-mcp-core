@@ -5,12 +5,12 @@ pub mod protocol;
 use std::collections::HashMap;
 
 use gate_engine::{ConfidenceGateEngine, GateConfig, LoopDecision};
-use ownership_lab::{inspect_memory_layout, ZeroCopyDomNode};
+use ownership_lab::{inspect_memory_layout, parse_and_filter_som_nodes};
 use protocol::{PrimitiveResult, SystemOneResponse};
 
 fn main() {
     println!("=========================================================================");
-    println!("🦀 Rust_Chain_Lab | Step 01: Rust 内存布局与 System 1 (Laya-Vision) 决策状态机");
+    println!("🦀 systemone-mcp-core | Rust 零拷贝 SoM 解析器与 System-1 (Laya-Vision) 决策核");
     println!("=========================================================================\n");
 
     // 1. 内存布局实验：验证栈上胖指针与引用切片字节大小
@@ -20,26 +20,23 @@ fn main() {
         string_sz, str_sz, box_sz
     );
 
-    // 2. 零拷贝 SoM 候选控件树解析
+    // 2. 零拷贝 SoM 候选控件树解析（自动过滤 1px 分割线与噪点）
     let raw_dom_dump = "\
-        Tab | 合约 (Futures) | 210,1800,420,1920\n\
-        EditText | 输入价格 (65000 USDT) | 80,520,650,610\n\
-        EditText | 输入数量 (0.1 BTC) | 80,640,650,730\n\
-        Button | 买入做多 (Buy Long) | 80,920,650,1020\n\
-        Modal_Button | 二次确认弹窗-确认下单 | 140,1100,590,1190";
+        Divider | | 0,480,1080,481\n\
+        Tab | AI Compute Instances | 210,1800,420,1920\n\
+        EditText | Model ID (Qwen2.5-72B-Instruct) | 80,520,650,610\n\
+        EditText | Replica Count (4x H100) | 80,640,650,730\n\
+        Button | Deploy Endpoint | 80,920,650,1020\n\
+        Modal_Button | Confirm Provisioning | 140,1100,590,1190";
 
-    println!("[2] 零拷贝解析移动端 SoM (Set-of-Mark) 候选锚点:");
-    let candidates: Vec<(usize, ZeroCopyDomNode<'_>)> = raw_dom_dump
-        .lines()
-        .filter_map(ZeroCopyDomNode::parse_line)
-        .enumerate()
-        .map(|(idx, node)| (idx + 1, node))
-        .collect();
+    println!("[2] 零拷贝解析移动端 SoM (Set-of-Mark) 候选锚点 (自动过滤 <100px² 噪点):");
+    let candidates = parse_and_filter_som_nodes(raw_dom_dump, 100);
 
     for (som_id, node) in &candidates {
         let (cx, cy) = node.center_point();
+        let area = node.area();
         println!(
-            "    #{som_id}: [{tag}] \"{label}\" -> bounds={bounds:?}, tap_center=({cx}, {cy})",
+            "    #{som_id}: [{tag}] \"{label}\" -> bounds={bounds:?}, area={area}px², tap_center=({cx}, {cy})",
             tag = node.tag,
             label = node.label,
             bounds = node.bounds
@@ -51,7 +48,7 @@ fn main() {
     println!("[3] 启动 System 1 (noul / choice / score) 置信度门控状态机演练:");
     let mut engine = ConfidenceGateEngine::new(GateConfig::default());
 
-    // 构造模拟轨迹：加载等待 -> 弹窗拦截 -> 点击买入按钮(#4) -> 确认弹窗(#5) -> 旁路 API 201 完成
+    // 构造模拟轨迹：加载等待 -> 弹窗拦截 -> 点击部署按钮(#4) -> 确认弹窗(#5) -> 旁路 API 201 完成
     let mut step1_loading = SystemOneResponse::new();
     step1_loading.insert("is_loading", PrimitiveResult::Noul { p_true: 0.89 });
 
@@ -72,7 +69,7 @@ fn main() {
             "progress_score": { "type": "score", "expected_score": 3.05 }
         }
     }"#;
-    let step3_tap_buy =
+    let step3_tap_deploy =
         SystemOneResponse::from_json_str(raw_step3_json).expect("解析 /v1/systemone JSON 失败");
 
     let mut step4_confirm_modal = SystemOneResponse::new();
@@ -97,8 +94,8 @@ fn main() {
 
     let trajectory = [
         ("Step 1 (骨架屏加载中)", &step1_loading, false),
-        ("Step 2 (突发广告弹窗)", &step2_popup, false),
-        ("Step 3 (表单就绪待下单)", &step3_tap_buy, false),
+        ("Step 2 (突发通知弹窗)", &step2_popup, false),
+        ("Step 3 (参数就绪待部署)", &step3_tap_deploy, false),
         ("Step 4 (二次确认弹窗)", &step4_confirm_modal, false),
         ("Step 5 (旁路捕获 HTTP 201)", &step5_done, true),
     ];
