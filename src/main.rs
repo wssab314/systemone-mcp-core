@@ -1,16 +1,13 @@
-pub mod gate_engine;
-pub mod ownership_lab;
-pub mod protocol;
-
 use std::collections::HashMap;
 
-use gate_engine::{ConfidenceGateEngine, GateConfig, LoopDecision};
-use ownership_lab::{inspect_memory_layout, parse_and_filter_som_nodes};
-use protocol::{PrimitiveResult, SystemOneResponse};
+use systemone_mcp_core::context_compressor::UiDeltaCompressor;
+use systemone_mcp_core::gate_engine::{ConfidenceGateEngine, GateConfig, LoopDecision};
+use systemone_mcp_core::ownership_lab::{inspect_memory_layout, parse_and_filter_som_nodes};
+use systemone_mcp_core::protocol::{PrimitiveResult, SystemOneResponse};
 
 fn main() {
     println!("=========================================================================");
-    println!("🦀 systemone-mcp-core | Rust 零拷贝 SoM 解析器与 System-1 (Laya-Vision) 决策核");
+    println!("🦀 systemone-mcp-core | 极速 UI Skills & Delta 上下文压缩 MCP 引擎");
     println!("=========================================================================\n");
 
     // 1. 内存布局实验：验证栈上胖指针与引用切片字节大小
@@ -44,11 +41,46 @@ fn main() {
     }
     println!();
 
-    // 3. 模拟 System 1 (/v1/systemone) 单次前向传播闭环状态机
-    println!("[3] 启动 System 1 (noul / choice / score) 置信度门控状态机演练:");
+    // 3. 演练同构方向 3：OrderBook 级增量 UI 上下文压缩器 (UiDeltaCompressor)
+    println!("[3] 演练 UiDeltaCompressor (帧间增量差分压缩):");
+    let mut compressor = UiDeltaCompressor::new(100);
+    let mut f1 = Vec::new();
+    let mut f2 = Vec::new();
+    for i in 0..40 {
+        let card = format!(
+            "StaticCard | Worker Node #{i:02} (Ready, 80GB VRAM) | 20,{y1},1060,{y2}",
+            y1 = 100 + i * 35,
+            y2 = 130 + i * 35
+        );
+        let div = format!("Divider | | 0,{y},1080,{y}", y = 99 + i * 35);
+        f1.push(card.clone());
+        f1.push(div.clone());
+        f2.push(card);
+        f2.push(div);
+    }
+    f1.push("EditText | Replica Count: 2 | 80,1550,650,1640".to_string());
+    f1.push("Spinner | Fetching GPU Quota... | 400,1660,680,1720".to_string());
+
+    f2.push("EditText | Replica Count: 4 | 80,1550,650,1640".to_string());
+    f2.push("Modal_Button | Confirm Provisioning | 140,1750,590,1840".to_string());
+
+    let _patch1 = compressor.compress_frame(&f1.join("\n"));
+    let patch2 = compressor.compress_frame(&f2.join("\n"));
+    println!(
+        "    • 原始第 2 帧大小: {} bytes -> 增量压缩后大小: {} bytes (脱水率: {:.1}%)",
+        patch2.raw_bytes,
+        patch2.compressed_prompt.len(),
+        patch2.compression_ratio() * 100.0
+    );
+    for line in patch2.compressed_prompt.lines() {
+        println!("      {line}");
+    }
+    println!();
+
+    // 4. 模拟 System 1 (/v1/systemone) 单次前向传播闭环状态机
+    println!("[4] 启动 System 1 (noul / choice / score) 置信度门控状态机演练:");
     let mut engine = ConfidenceGateEngine::new(GateConfig::default());
 
-    // 构造模拟轨迹：加载等待 -> 弹窗拦截 -> 点击部署按钮(#4) -> 确认弹窗(#5) -> 旁路 API 201 完成
     let mut step1_loading = SystemOneResponse::new();
     step1_loading.insert("is_loading", PrimitiveResult::Noul { p_true: 0.89 });
 
